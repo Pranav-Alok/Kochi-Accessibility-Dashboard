@@ -1,0 +1,5 @@
+{
+  "name": "Kochi Accessibility Observatory",
+  "description": "Interactive dashboard for Kochi's urban mobility indicators including bus access, walkability, and last-mile connectivity.",
+  "requestFramePermissions": []
+}
