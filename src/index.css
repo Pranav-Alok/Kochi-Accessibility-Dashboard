@@ -7,18 +7,71 @@
 }
 
 @layer base {
+  :root {
+    --bg: #000;
+    --text: #fff;
+    --panel-bg: rgba(255, 255, 255, 0.03);
+    --panel-border: rgba(255, 255, 255, 0.05);
+    --scrollbar-thumb: rgba(255, 255, 255, 0.1);
+    --scrollbar-hover: rgba(255, 255, 255, 0.2);
+    --slate-400: #94a3b8;
+    --slate-500: #64748b;
+    --slate-600: #475569;
+    --accent: #818cf8; /* indigo-400 equivalent */
+    --accent-bg: rgba(129, 140, 248, 0.1);
+    --map-nodata: #2d2d2d;
+    --map-border: rgba(255, 255, 255, 0.3);
+    --status-emerald: #34d399; /* emerald-400 */
+    --status-emerald-bg: rgba(52, 211, 153, 0.1);
+    --status-blue: #60a5fa; /* blue-400 */
+    --status-blue-bg: rgba(96, 165, 250, 0.1);
+    --status-amber: #fbbf24; /* amber-400 */
+    --status-amber-bg: rgba(251, 191, 36, 0.1);
+    --status-rose: #fb7185; /* rose-400 */
+    --status-rose-bg: rgba(251, 113, 133, 0.1);
+    --status-violet: #a78bfa; /* violet-400 */
+    --status-violet-bg: rgba(167, 139, 250, 0.1);
+  }
+
+  :root.light {
+    --bg: #f8fafc;
+    --text: #0f172a;
+    --panel-bg: rgba(15, 23, 42, 0.03);
+    --panel-border: rgba(15, 23, 42, 0.08);
+    --scrollbar-thumb: rgba(15, 23, 42, 0.1);
+    --scrollbar-hover: rgba(15, 23, 42, 0.2);
+    --slate-400: #475569;
+    --slate-500: #64748b;
+    --slate-600: #94a3b8;
+    --accent: #4f46e5; /* indigo-600 equivalent */
+    --accent-bg: rgba(79, 70, 229, 0.1);
+    --map-nodata: #e2e8f0;
+    --map-border: rgba(15, 23, 42, 0.2);
+    --status-emerald: #059669; /* emerald-600 */
+    --status-emerald-bg: rgba(5, 150, 105, 0.1);
+    --status-blue: #2563eb; /* blue-600 */
+    --status-blue-bg: rgba(37, 99, 235, 0.1);
+    --status-amber: #d97706; /* amber-600 */
+    --status-amber-bg: rgba(217, 119, 6, 0.1);
+    --status-rose: #e11d48; /* rose-600 */
+    --status-rose-bg: rgba(225, 29, 72, 0.1);
+    --status-violet: #7c3aed; /* violet-600 */
+    --status-violet-bg: rgba(124, 58, 237, 0.1);
+  }
+
   html, body, #root {
     height: 100%;
     margin: 0;
     padding: 0;
-    background: #000;
-    color: #fff;
+    background: var(--bg);
+    color: var(--text);
     -webkit-font-smoothing: antialiased;
+    transition: background 0.3s ease, color 0.3s ease;
   }
 }
 
 .leaflet-container {
-  background: #000 !important;
+  background: var(--bg) !important;
 }
 
 /* Custom scrollbar for sidebar */
@@ -31,20 +84,24 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--scrollbar-thumb);
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--scrollbar-hover);
 }
 
 .glass-panel {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--panel-bg);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--panel-border);
 }
 
 .text-glow {
   text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+}
+
+:root.light .text-glow {
+  text-shadow: 0 0 20px rgba(15, 23, 42, 0.1);
 }

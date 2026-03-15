@@ -43,7 +43,9 @@ import {
   RefreshCcw,
   FileJson,
   Database,
-  MousePointerClick
+  MousePointerClick,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -53,6 +55,7 @@ import { scaleSequential } from 'd3-scale';
 import { interpolateYlGnBu } from 'd3-scale-chromatic';
 import { GoogleGenAI } from "@google/genai";
 import shp from 'shpjs';
+import { Buffer } from 'buffer';
 
 // Utility for tailwind classes
 function cn(...inputs: ClassValue[]) {
@@ -67,28 +70,28 @@ const INDICATORS: { id: Indicator; label: string; icon: any; color: string; desc
     id: 'bus_access', 
     label: 'Bus Stop Access', 
     icon: Bus, 
-    color: '#3b82f6',
+    color: 'var(--status-blue)',
     description: 'Proximity to public transit nodes and frequency of service.'
   },
   { 
     id: 'walkability', 
     label: 'Walkability', 
     icon: Footprints, 
-    color: '#10b981',
+    color: 'var(--status-emerald)',
     description: 'Quality of pedestrian infrastructure and safety.'
   },
   { 
     id: 'last_mile', 
     label: 'Last Mile Connectivity', 
     icon: LinkIcon, 
-    color: '#f59e0b',
+    color: 'var(--status-amber)',
     description: 'Ease of reaching final destinations from transit hubs.'
   },
   { 
     id: 'composite', 
     label: 'Composite Mobility Score', 
     icon: Activity, 
-    color: '#8b5cf6',
+    color: 'var(--status-violet)',
     description: 'Overall urban mobility performance combining all indicators.'
   },
 ];
@@ -174,6 +177,16 @@ const METHODOLOGY_DATA = {
 
 export default function App() {
   const [activeSection, setActiveSection] = useState<Section>('about');
+  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+
+  useEffect(() => {
+    if (theme === 'light') {
+      document.documentElement.classList.add('light');
+    } else {
+      document.documentElement.classList.remove('light');
+    }
+  }, [theme]);
+
   const [selectedIndicator, setSelectedIndicator] = useState<Indicator>('bus_access');
   const [selectedWard, setSelectedWard] = useState<any>(null);
   const [comparisonWard, setComparisonWard] = useState<any>(null);
@@ -419,10 +432,10 @@ export default function App() {
     const hasData = value !== null && value !== undefined;
 
     return {
-      fillColor: hasData ? colorScale(value) : '#2d2d2d',
+      fillColor: hasData ? colorScale(value) : 'var(--map-nodata)',
       weight: (isSelected || isComparison) ? 4 : 1.5,
       opacity: 1,
-      color: isSelected ? '#4f46e5' : (isComparison ? '#f59e0b' : 'white'),
+      color: isSelected ? 'var(--accent)' : (isComparison ? '#f59e0b' : 'var(--map-border)'),
       fillOpacity: (isSelected || isComparison) ? 0.9 : (hasData ? 0.7 : 0.4),
     };
   };
@@ -636,10 +649,10 @@ export default function App() {
   }, [searchQuery, geoJsonData]);
 
   return (
-    <div className="flex h-screen bg-black overflow-hidden font-sans text-slate-300">
+    <div className="flex h-screen bg-[var(--bg)] overflow-hidden font-sans text-[var(--text)]">
       {/* Navigation Rail */}
-      <nav className="w-20 bg-black border-r border-white/5 flex flex-col items-center py-8 gap-10 z-30">
-        <div className="p-3 bg-white/5 rounded-2xl text-indigo-500 border border-white/10 shadow-2xl shadow-indigo-500/10">
+      <nav className="w-20 bg-[var(--bg)] border-r border-[var(--panel-border)] flex flex-col items-center py-8 gap-10 z-30">
+        <div className="p-3 bg-[var(--panel-bg)] text-[var(--accent)] border border-[var(--panel-border)] shadow-2xl shadow-[var(--accent)]/10">
           <MapIcon size={24} />
         </div>
         <div className="flex-1 flex flex-col gap-2">
@@ -650,34 +663,43 @@ export default function App() {
               className={cn(
                 "p-4 rounded-2xl transition-all duration-500 relative group",
                 activeSection === section.id 
-                  ? "bg-white/5 text-white" 
-                  : "text-slate-600 hover:text-slate-300 hover:bg-white/5"
+                  ? "bg-[var(--panel-bg)] text-[var(--text)]" 
+                  : "text-[var(--slate-600)] hover:text-[var(--text)] hover:bg-[var(--panel-bg)]"
               )}
               title={section.label}
             >
-              <section.icon size={20} className={cn("transition-transform duration-500 group-hover:scale-110", activeSection === section.id && "text-indigo-400")} />
+              <section.icon size={20} className={cn("transition-transform duration-500 group-hover:scale-110", activeSection === section.id && "text-[var(--accent)]")} />
               {activeSection === section.id && (
                 <motion.div 
                   layoutId="active-rail"
-                  className="absolute left-0 top-1/3 bottom-1/3 w-0.5 bg-indigo-500 rounded-r-full shadow-[0_0_10px_rgba(99,102,241,0.5)]"
+                  className="absolute left-0 top-1/3 bottom-1/3 w-0.5 bg-[var(--accent)] rounded-r-full shadow-[0_0_10px_var(--accent-bg)]"
                 />
               )}
             </button>
           ))}
         </div>
+
+        {/* Theme Toggle */}
+        <button
+          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+          className="p-4 rounded-2xl text-[var(--slate-600)] hover:text-[var(--text)] hover:bg-[var(--panel-bg)] transition-all duration-300"
+          title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+        >
+          {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+        </button>
       </nav>
 
       {/* Narrative Sidebar */}
-      <aside className="w-[420px] bg-[#050505] border-r border-white/5 flex flex-col z-20 overflow-hidden">
-        <div className="p-8 border-b border-white/5 bg-black/20 backdrop-blur-md">
-          <h1 className="text-3xl font-bold tracking-tight text-white mb-1">
-            Kochi <span className="text-indigo-400">Accessibility</span>
+      <aside className="w-[420px] bg-[var(--bg)] border-r border-[var(--panel-border)] flex flex-col z-20 overflow-hidden">
+        <div className="p-8 border-b border-[var(--panel-border)] bg-[var(--panel-bg)] backdrop-blur-md">
+          <h1 className="text-3xl font-bold tracking-tight text-[var(--text)] mb-1">
+            Kochi <span className="text-[var(--accent)]">Accessibility</span>
           </h1>
           <div className="flex items-center gap-2">
-            <p className="text-[9px] font-mono font-medium text-slate-500 uppercase tracking-[0.3em]">
+            <p className="text-[9px] font-mono font-medium text-[var(--slate-500)] uppercase tracking-[0.3em]">
               Observatory v2.0
             </p>
-            <div className="h-px flex-1 bg-white/5" />
+            <div className="h-px flex-1 bg-[var(--panel-border)]" />
           </div>
         </div>
 
@@ -693,54 +715,54 @@ export default function App() {
               >
                 <div className="space-y-6">
                   <div className="space-y-4">
-                    <h2 className="text-2xl font-bold text-white flex items-center gap-3">
-                      <BookOpen className="text-indigo-400" size={20} />
+                    <h2 className="text-2xl font-bold text-[var(--text)] flex items-center gap-3">
+                      <BookOpen className="text-[var(--accent)]" size={20} />
                       Urban Context
                     </h2>
-                    <div className="space-y-4 text-slate-400 text-sm leading-relaxed">
+                    <div className="space-y-4 text-[var(--slate-400)] text-sm leading-relaxed">
                       <p>
                         Kochi, the commercial capital of Kerala, faces unique mobility challenges stemming from its complex geography of islands and backwaters.
                       </p>
                       <ul className="space-y-4">
                         <li className="flex gap-4">
-                          <div className="w-1 h-1 rounded-full bg-indigo-500/50 mt-2 shrink-0" />
-                          <span className="text-[13px]"><strong className="text-slate-200 font-medium">Fragmented Transit:</strong> A mix of private buses, KSRTC, and water metros that often lack integrated scheduling.</span>
+                          <div className="w-1 h-1 rounded-full bg-[var(--accent)]/50 mt-2 shrink-0" />
+                          <span className="text-[13px]"><strong className="text-[var(--slate-300)] font-medium">Fragmented Transit:</strong> A mix of private buses, KSRTC, and water metros that often lack integrated scheduling.</span>
                         </li>
                         <li className="flex gap-4">
-                          <div className="w-1 h-1 rounded-full bg-indigo-500/50 mt-2 shrink-0" />
-                          <span className="text-[13px]"><strong className="text-slate-200 font-medium">First/Last Mile Gaps:</strong> Trunk lines are often inaccessible due to poor pedestrian infrastructure.</span>
+                          <div className="w-1 h-1 rounded-full bg-[var(--accent)]/50 mt-2 shrink-0" />
+                          <span className="text-[13px]"><strong className="text-[var(--slate-300)] font-medium">First/Last Mile Gaps:</strong> Trunk lines are often inaccessible due to poor pedestrian infrastructure.</span>
                         </li>
                       </ul>
                     </div>
                   </div>
 
                   <div className="space-y-4">
-                    <h3 className="text-[10px] font-mono font-medium text-slate-500 uppercase tracking-[0.3em]">Motivation</h3>
+                    <h3 className="text-[10px] font-mono font-medium text-[var(--slate-500)] uppercase tracking-[0.3em]">Motivation</h3>
                     <div className="grid grid-cols-1 gap-3">
                       <div className="p-5 glass-panel rounded-2xl">
-                        <h4 className="text-xs font-bold text-white mb-2 tracking-tight">Evidence-Based Planning</h4>
-                        <p className="text-[11px] text-slate-500 leading-relaxed">Identify specific wards where transit investment will yield the highest social return.</p>
+                        <h4 className="text-xs font-bold text-[var(--text)] mb-2 tracking-tight">Evidence-Based Planning</h4>
+                        <p className="text-[11px] text-[var(--slate-500)] leading-relaxed">Identify specific wards where transit investment will yield the highest social return.</p>
                       </div>
                       <div className="p-5 glass-panel rounded-2xl">
-                        <h4 className="text-xs font-bold text-white mb-2 tracking-tight">Equity & Inclusion</h4>
-                        <p className="text-[11px] text-slate-500 leading-relaxed">Measure how effectively the transport network serves low-income communities.</p>
+                        <h4 className="text-xs font-bold text-[var(--text)] mb-2 tracking-tight">Equity & Inclusion</h4>
+                        <p className="text-[11px] text-[var(--slate-500)] leading-relaxed">Measure how effectively the transport network serves low-income communities.</p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="p-6 bg-indigo-600/10 border border-indigo-500/20 rounded-2xl space-y-4">
-                    <h4 className="text-xs font-bold text-indigo-400 uppercase tracking-widest">Key References</h4>
+                  <div className="p-6 bg-[var(--accent)]/10 border border-[var(--accent)]/20 rounded-2xl space-y-4">
+                    <h4 className="text-xs font-bold text-[var(--accent)] uppercase tracking-widest">Key References</h4>
                     <ul className="space-y-3">
-                      <li className="text-[11px] text-slate-300 leading-normal">
-                        <span className="block font-bold text-white mb-0.5">Comprehensive Mobility Plan (CMP) 2024</span>
+                      <li className="text-[11px] text-[var(--slate-300)] leading-normal">
+                        <span className="block font-bold text-[var(--text)] mb-0.5">Comprehensive Mobility Plan (CMP) 2024</span>
                         Kochi Municipal Corporation & KMRL Strategic Framework.
                       </li>
-                      <li className="text-[11px] text-slate-300 leading-normal">
-                        <span className="block font-bold text-white mb-0.5">National Urban Transport Policy (NUTP)</span>
+                      <li className="text-[11px] text-[var(--slate-300)] leading-normal">
+                        <span className="block font-bold text-[var(--text)] mb-0.5">National Urban Transport Policy (NUTP)</span>
                         Ministry of Housing and Urban Affairs (MoHUA) Guidelines.
                       </li>
-                      <li className="text-[11px] text-slate-300 leading-normal">
-                        <span className="block font-bold text-white mb-0.5">WRI India: Transit Oriented Development</span>
+                      <li className="text-[11px] text-[var(--slate-300)] leading-normal">
+                        <span className="block font-bold text-[var(--text)] mb-0.5">WRI India: Transit Oriented Development</span>
                         Assessment of Kochi's Metro corridors and station influence areas.
                       </li>
                     </ul>
@@ -748,24 +770,24 @@ export default function App() {
                 </div>
                 
                 <div className="space-y-4">
-                  <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Indicator Overview</h3>
+                  <h3 className="text-xs font-bold text-[var(--slate-500)] uppercase tracking-widest">Indicator Overview</h3>
                   <div className="grid grid-cols-1 gap-4">
                   {INDICATORS.map(ind => (
-                    <div key={ind.id} className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                    <div key={ind.id} className="p-4 bg-[var(--panel-bg)] rounded-2xl border border-[var(--panel-border)]">
                       <div className="flex items-center gap-3 mb-2">
-                        <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-lg">
+                        <div className="p-2 bg-[var(--accent-bg)] text-[var(--accent)] rounded-lg">
                           <ind.icon size={18} />
                         </div>
-                        <h3 className="font-bold text-sm">{ind.label}</h3>
+                        <h3 className="font-bold text-sm text-[var(--text)]">{ind.label}</h3>
                       </div>
-                      <p className="text-xs text-slate-500">{ind.description}</p>
+                      <p className="text-xs text-[var(--slate-500)]">{ind.description}</p>
                     </div>
                   ))}
                 </div>
               </div>
 
-              <div className="space-y-4 pt-4 border-t border-white/5">
-                  <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+              <div className="space-y-4 pt-4 border-t border-[var(--panel-border)]">
+                  <h3 className="text-xs font-bold text-[var(--slate-500)] uppercase tracking-widest flex items-center gap-2">
                     <RefreshCcw size={12} />
                     Data Configuration
                   </h3>
@@ -773,14 +795,14 @@ export default function App() {
                   <div className="space-y-3">
                     <button 
                       onClick={() => fileInputRef.current?.click()}
-                      className="w-full p-4 bg-white/5 border border-white/10 hover:bg-white/10 rounded-2xl transition-all flex items-center gap-4 group"
+                      className="w-full p-4 bg-[var(--panel-bg)] border border-[var(--panel-border)] hover:bg-[var(--panel-bg)] rounded-2xl transition-all flex items-center gap-4 group"
                     >
-                      <div className="p-3 bg-indigo-500/10 text-indigo-400 rounded-xl group-hover:bg-indigo-500 group-hover:text-white transition-all">
+                      <div className="p-3 bg-[var(--accent-bg)] text-[var(--accent)] rounded-xl group-hover:bg-[var(--accent)] group-hover:text-white transition-all">
                         <Upload size={20} />
                       </div>
                       <div className="text-left">
-                        <span className="block font-bold text-sm text-white">Upload Shapefile</span>
-                        <span className="block text-[10px] text-slate-500">Supports .zip or .shp + .dbf</span>
+                        <span className="block font-bold text-sm text-[var(--text)]">Upload Shapefile</span>
+                        <span className="block text-[10px] text-[var(--slate-500)]">Supports .zip or .shp + .dbf</span>
                       </div>
                     </button>
                     
@@ -794,15 +816,15 @@ export default function App() {
                     />
 
                     {uploadError && (
-                      <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-start gap-3">
-                        <AlertCircle size={14} className="text-rose-500 mt-0.5 shrink-0" />
-                        <p className="text-[10px] text-rose-400 leading-normal">{uploadError}</p>
-                      </div>
+                <div className="p-3 bg-[var(--status-rose-bg)] border border-[var(--status-rose)]/20 rounded-xl flex items-start gap-3">
+                  <AlertCircle size={14} className="text-[var(--status-rose)] mt-0.5 shrink-0" />
+                  <p className="text-[10px] text-[var(--status-rose)] leading-normal">{uploadError}</p>
+                </div>
                     )}
 
                     <button 
                       onClick={resetToDefault}
-                      className="w-full py-2 text-[10px] font-bold text-slate-500 hover:text-indigo-400 transition-colors flex items-center justify-center gap-2"
+                      className="w-full py-2 text-[10px] font-bold text-[var(--slate-500)] hover:text-[var(--accent)] transition-colors flex items-center justify-center gap-2"
                     >
                       <FileJson size={12} />
                       RESET TO DEFAULT DATA
@@ -812,7 +834,7 @@ export default function App() {
 
                 <button 
                   onClick={() => setActiveSection('map')}
-                  className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 group"
+                  className="w-full py-4 bg-[var(--accent)] hover:opacity-90 text-white rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 group"
                 >
                   Explore the Map
                   <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
@@ -829,17 +851,17 @@ export default function App() {
                 className="space-y-10"
               >
                 <div className="space-y-4">
-                  <h2 className="text-2xl font-bold text-white flex items-center gap-3">
-                    <MapIcon className="text-indigo-400" size={20} />
+                  <h2 className="text-2xl font-bold text-[var(--text)] flex items-center gap-3">
+                    <MapIcon className="text-[var(--accent)]" size={20} />
                     Accessibility Map
                   </h2>
-                  <p className="text-slate-400 text-[13px] leading-relaxed">
+                  <p className="text-[var(--slate-400)] text-[13px] leading-relaxed">
                     Visualize the spatial distribution of mobility scores across the city. Darker areas indicate higher accessibility.
                   </p>
                 </div>
 
                 <div className="space-y-4">
-                  <label className="text-[9px] font-mono font-medium text-slate-500 uppercase tracking-[0.3em]">Active Indicator</label>
+                  <label className="text-[9px] font-mono font-medium text-[var(--slate-500)] uppercase tracking-[0.3em]">Active Indicator</label>
                   <div className="flex flex-col gap-2">
                     {INDICATORS.map((indicator) => (
                       <button
@@ -848,19 +870,19 @@ export default function App() {
                         className={cn(
                           "p-4 rounded-2xl transition-all duration-500 text-left border flex items-center gap-4 group",
                           selectedIndicator === indicator.id
-                            ? "bg-indigo-500/10 border-indigo-500/30 text-white"
-                            : "bg-white/5 border-transparent text-slate-500 hover:bg-white/10"
+                            ? "bg-[var(--accent-bg)] border-[var(--accent)]/30 text-[var(--text)]"
+                            : "bg-[var(--panel-bg)] border-transparent text-[var(--slate-500)] hover:bg-[var(--panel-bg)]/80"
                         )}
                       >
                         <div className={cn(
                           "p-2.5 rounded-xl transition-colors duration-500",
-                          selectedIndicator === indicator.id ? "bg-indigo-500 text-white" : "bg-white/5 text-slate-500"
+                          selectedIndicator === indicator.id ? "bg-[var(--accent)] text-white" : "bg-[var(--panel-bg)] text-[var(--slate-500)]"
                         )}>
                           <indicator.icon size={18} />
                         </div>
                         <div className="flex-1">
-                          <span className="block font-bold text-xs tracking-tight">{indicator.label}</span>
-                          <span className="block text-[10px] text-slate-500 mt-0.5 group-hover:text-slate-400 transition-colors">{indicator.description}</span>
+                          <span className="block font-bold text-xs tracking-tight text-[var(--text)]">{indicator.label}</span>
+                          <span className="block text-[10px] text-[var(--slate-500)] mt-0.5 group-hover:text-[var(--slate-400)] transition-colors">{indicator.description}</span>
                         </div>
                       </button>
                     ))}
@@ -868,16 +890,16 @@ export default function App() {
                 </div>
 
                 <div className="relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--slate-500)]" size={16} />
                   <input
                     type="text"
                     placeholder="Find a ward..."
-                    className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/5 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all"
+                    className="w-full pl-12 pr-4 py-4 bg-[var(--panel-bg)] border border-[var(--panel-border)] rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40 transition-all"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
                   {filteredWards.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 mt-2 bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl z-30 overflow-hidden">
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-[var(--bg)] border border-[var(--panel-border)] rounded-2xl shadow-2xl z-30 overflow-hidden">
                       {filteredWards.map((w: any) => (
                         <button
                           key={w.name}
@@ -886,10 +908,10 @@ export default function App() {
                             setActiveSection('diagnostics');
                             setSearchQuery('');
                           }}
-                          className="w-full px-4 py-3 text-left text-sm hover:bg-white/5 transition-colors flex justify-between items-center"
+                          className="w-full px-4 py-3 text-left text-sm hover:bg-[var(--panel-bg)] transition-colors flex justify-between items-center"
                         >
                           <span>{w.name}</span>
-                          <ArrowRight size={14} className="text-slate-600" />
+                          <ArrowRight size={14} className="text-[var(--slate-600)]" />
                         </button>
                       ))}
                     </div>
@@ -907,47 +929,47 @@ export default function App() {
                 className="space-y-10"
               >
                 <div className="space-y-4">
-                  <h2 className="text-2xl font-bold text-white flex items-center gap-3">
-                    <Activity className="text-indigo-400" size={20} />
+                  <h2 className="text-2xl font-bold text-[var(--text)] flex items-center gap-3">
+                    <Activity className="text-[var(--accent)]" size={20} />
                     Ward Diagnostics
                   </h2>
-                  <p className="text-slate-400 text-[13px] leading-relaxed">
+                  <p className="text-[var(--slate-400)] text-[13px] leading-relaxed">
                     Select a ward on the map to view granular performance metrics and infrastructure quality scores.
                   </p>
                 </div>
 
                 {!selectedWard ? (
-                  <div className="p-10 glass-panel rounded-[2rem] border-dashed border-white/10 flex flex-col items-center text-center gap-4">
-                    <div className="p-4 bg-white/5 rounded-full text-slate-600">
-                      <MousePointerClick size={32} />
+                    <div className="p-10 glass-panel rounded-[2rem] border-dashed border-[var(--panel-border)] flex flex-col items-center text-center gap-4">
+                      <div className="p-4 bg-[var(--panel-bg)] rounded-full text-[var(--slate-600)]">
+                        <MousePointerClick size={32} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-[var(--text)] mb-1 tracking-tight">No Ward Selected</p>
+                        <p className="text-[11px] text-[var(--slate-500)] leading-relaxed">Click any ward on the map to analyze its mobility profile.</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-bold text-white mb-1 tracking-tight">No Ward Selected</p>
-                      <p className="text-[11px] text-slate-500 leading-relaxed">Click any ward on the map to analyze its mobility profile.</p>
-                    </div>
-                  </div>
                 ) : (
                   <div className="space-y-8">
-                    <div className="p-6 glass-panel rounded-[2rem] border-indigo-500/20 relative overflow-hidden">
+                    <div className="p-6 glass-panel rounded-[2rem] border-[var(--accent)]/20 relative overflow-hidden">
                       <div className="absolute top-0 right-0 p-4">
-                        <div className="px-2 py-1 bg-indigo-500/20 rounded text-[9px] font-mono text-indigo-400 border border-indigo-500/30">
+                        <div className="px-2 py-1 bg-[var(--accent-bg)] rounded text-[9px] font-mono text-[var(--accent)] border border-[var(--accent)]/30">
                           SELECTED
                         </div>
                       </div>
-                      <h3 className="text-2xl font-bold text-white mb-1">{selectedWard.name}</h3>
-                      <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Kochi Municipal Ward</p>
+                      <h3 className="text-2xl font-bold text-[var(--text)] mb-1">{selectedWard.name}</h3>
+                      <p className="text-[10px] font-mono text-[var(--slate-500)] uppercase tracking-widest">Kochi Municipal Ward</p>
                       
                       <div className="mt-8 grid grid-cols-2 gap-4">
-                        <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                          <p className="text-[9px] font-mono text-slate-500 uppercase tracking-widest mb-1">Composite Score</p>
-                          <p className="text-3xl font-bold text-white">
+                        <div className="p-4 bg-[var(--panel-bg)] rounded-2xl border border-[var(--panel-border)]">
+                          <p className="text-[9px] font-mono text-[var(--slate-500)] uppercase tracking-widest mb-1">Composite Score</p>
+                          <p className="text-3xl font-bold text-[var(--text)]">
                             {(selectedWard.composite * 100).toFixed(1)}
-                            <span className="text-xs text-slate-500 ml-1 font-sans font-normal">%</span>
+                            <span className="text-xs text-[var(--slate-500)] ml-1 font-sans font-normal">%</span>
                           </p>
                         </div>
-                        <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                          <p className="text-[9px] font-mono text-slate-500 uppercase tracking-widest mb-1">Rank</p>
-                          <p className="text-3xl font-bold text-white">
+                        <div className="p-4 bg-[var(--panel-bg)] rounded-2xl border border-[var(--panel-border)]">
+                          <p className="text-[9px] font-mono text-[var(--slate-500)] uppercase tracking-widest mb-1">Rank</p>
+                          <p className="text-3xl font-bold text-[var(--text)]">
                             #{sortedWards.findIndex(w => w.name === selectedWard.name) + 1}
                           </p>
                         </div>
@@ -955,17 +977,17 @@ export default function App() {
                     </div>
 
                       {selectedWard.bus_access === null && selectedWard.walkability === null && selectedWard.last_mile === null ? (
-                        <div className="p-8 bg-white/5 rounded-2xl border border-dashed border-white/10 text-center">
-                          <AlertCircle className="mx-auto text-slate-600 mb-3" size={32} />
-                          <p className="text-slate-500 text-sm">No mobility data available for this ward yet.</p>
+                        <div className="p-8 bg-[var(--panel-bg)] rounded-2xl border border-dashed border-[var(--panel-border)] text-center">
+                          <AlertCircle className="mx-auto text-[var(--slate-600)] mb-3" size={32} />
+                          <p className="text-sm text-[var(--slate-500)]">No mobility data available for this ward yet.</p>
                         </div>
                       ) : (
                         <>
-                          <div className="h-64 w-full bg-white/5 rounded-2xl p-4">
+                          <div className="h-64 w-full bg-[var(--panel-bg)] rounded-2xl p-4">
                             <ResponsiveContainer width="100%" height="100%">
                               <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
-                                <PolarGrid stroke="rgba(255,255,255,0.1)" />
-                                <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                                <PolarGrid stroke="var(--panel-border)" />
+                                <PolarAngleAxis dataKey="subject" tick={{ fill: 'var(--slate-400)', fontSize: 10 }} />
                                 <Radar
                                   name="Score"
                                   dataKey="value"
@@ -979,12 +1001,12 @@ export default function App() {
 
                           <div className="grid grid-cols-1 gap-3">
                             {INDICATORS.map(ind => (
-                              <div key={ind.id} className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5">
+                              <div key={ind.id} className="flex items-center justify-between p-4 bg-[var(--panel-bg)] rounded-2xl border border-[var(--panel-border)]">
                                 <div className="flex items-center gap-3">
-                                  <ind.icon size={16} className="text-slate-500" />
-                                  <span className="text-sm text-slate-400">{ind.label}</span>
+                                  <ind.icon size={16} className="text-[var(--slate-500)]" />
+                                  <span className="text-sm text-[var(--slate-400)]">{ind.label}</span>
                                 </div>
-                                <span className="font-mono font-bold text-indigo-400">
+                                <span className="font-mono font-bold text-[var(--accent)]">
                                   {selectedWard[ind.id] !== null 
                                     ? `${(selectedWard[ind.id] * 100).toFixed(0)}%` 
                                     : 'N/A'}
@@ -1008,11 +1030,11 @@ export default function App() {
                 className="space-y-8"
               >
                 <div className="space-y-4">
-                  <h2 className="text-xl font-bold text-white flex items-center gap-3">
-                    <BarChart3 className="text-indigo-500" size={20} />
+                  <h2 className="text-xl font-bold text-[var(--text)] flex items-center gap-3">
+                    <BarChart3 className="text-[var(--accent)]" size={20} />
                     Ward Comparison
                   </h2>
-                  <p className="text-slate-400 text-sm">
+                  <p className="text-[var(--slate-400)] text-sm">
                     Select two wards to compare their mobility performance across all indicators.
                   </p>
                 </div>
@@ -1022,28 +1044,28 @@ export default function App() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Ward A</label>
+                        <label className="text-[10px] font-bold text-[var(--slate-500)] uppercase tracking-widest">Ward A</label>
                         {selectedWard && (
-                          <button onClick={() => setSelectedWard(null)} className="text-[9px] text-rose-500 font-bold hover:underline">CLEAR</button>
+                          <button onClick={() => setSelectedWard(null)} className="text-[9px] text-[var(--status-rose)] font-bold hover:underline">CLEAR</button>
                         )}
                       </div>
                       <div className={cn(
                         "p-3 rounded-xl border text-sm font-bold truncate",
-                        selectedWard ? "bg-indigo-500/10 border-indigo-500/20 text-indigo-400" : "bg-white/5 border-white/5 text-slate-600"
+                        selectedWard ? "bg-[var(--accent-bg)] border-[var(--accent)]/20 text-[var(--accent)]" : "bg-[var(--panel-bg)] border-[var(--panel-border)] text-[var(--slate-600)]"
                       )}>
                         {selectedWard?.name || 'Select on Map'}
                       </div>
                     </div>
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Ward B</label>
+                        <label className="text-[10px] font-bold text-[var(--slate-500)] uppercase tracking-widest">Ward B</label>
                         {comparisonWard && (
-                          <button onClick={() => setComparisonWard(null)} className="text-[9px] text-rose-500 font-bold hover:underline">CLEAR</button>
+                          <button onClick={() => setComparisonWard(null)} className="text-[9px] text-[var(--status-rose)] font-bold hover:underline">CLEAR</button>
                         )}
                       </div>
                       <div className={cn(
                         "p-3 rounded-xl border text-sm font-bold truncate",
-                        comparisonWard ? "bg-amber-500/10 border-amber-500/20 text-amber-400" : "bg-white/5 border-white/5 text-slate-600"
+                        comparisonWard ? "bg-[var(--status-amber-bg)] border-[var(--status-amber)]/20 text-[var(--status-amber)]" : "bg-[var(--panel-bg)] border-[var(--panel-border)] text-[var(--slate-600)]"
                       )}>
                         {comparisonWard?.name || 'Search below'}
                       </div>
@@ -1052,16 +1074,16 @@ export default function App() {
 
                   {/* Search for Ward B */}
                   <div className="relative">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--slate-500)]" size={16} />
                     <input 
                       type="text"
                       placeholder="Search for Ward B..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full bg-white/5 border border-white/5 rounded-2xl py-4 pl-12 pr-4 text-sm focus:outline-none focus:border-indigo-500 transition-all"
+                      className="w-full bg-[var(--panel-bg)] border border-[var(--panel-border)] rounded-2xl py-4 pl-12 pr-4 text-sm focus:outline-none focus:border-[var(--accent)] transition-all"
                     />
                     {filteredWards.length > 0 && (
-                      <div className="absolute top-full left-0 right-0 mt-2 bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden">
+                      <div className="absolute top-full left-0 right-0 mt-2 bg-[var(--bg)] border border-[var(--panel-border)] rounded-2xl shadow-2xl z-50 overflow-hidden">
                         {filteredWards.map((w: any) => (
                           <button
                             key={w.name}
@@ -1069,10 +1091,10 @@ export default function App() {
                               setComparisonWard(w);
                               setSearchQuery('');
                             }}
-                            className="w-full px-4 py-3 text-left text-sm hover:bg-white/5 flex items-center justify-between group"
+                            className="w-full px-4 py-3 text-left text-sm hover:bg-[var(--panel-bg)] flex items-center justify-between group"
                           >
                             <span>{w.name}</span>
-                            <ArrowRight size={14} className="text-slate-600 group-hover:text-indigo-400" />
+                            <ArrowRight size={14} className="text-[var(--slate-600)] group-hover:text-[var(--accent)]" />
                           </button>
                         ))}
                       </div>
@@ -1082,16 +1104,16 @@ export default function App() {
                   {/* Comparison Chart */}
                   {selectedWard && comparisonWard ? (
                     <div className="space-y-8">
-                      <div className="h-72 w-full bg-white/5 rounded-2xl p-4">
+                      <div className="h-72 w-full bg-[var(--panel-bg)] rounded-2xl p-4">
                         <ResponsiveContainer width="100%" height="100%">
                           <RadarChart cx="50%" cy="50%" outerRadius="80%" data={comparisonData}>
-                            <PolarGrid stroke="rgba(255,255,255,0.1)" />
-                            <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                            <PolarGrid stroke="var(--panel-border)" />
+                            <PolarAngleAxis dataKey="subject" tick={{ fill: 'var(--slate-400)', fontSize: 10 }} />
                             <Radar
                               name={selectedWard.name}
                               dataKey="A"
-                              stroke="#818cf8"
-                              fill="#818cf8"
+                              stroke="var(--accent)"
+                              fill="var(--accent)"
                               fillOpacity={0.5}
                             />
                             <Radar
@@ -1103,7 +1125,7 @@ export default function App() {
                             />
                             <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '10px', textTransform: 'uppercase', fontWeight: 'bold' }} />
                             <Tooltip 
-                              contentStyle={{ backgroundColor: '#1a1a1a', border: 'none', borderRadius: '12px', fontSize: '12px' }}
+                              contentStyle={{ backgroundColor: 'var(--bg)', border: 'none', borderRadius: '12px', fontSize: '12px' }}
                             />
                           </RadarChart>
                         </ResponsiveContainer>
@@ -1116,25 +1138,25 @@ export default function App() {
                           const diff = (valA - valB) * 100;
                           
                           return (
-                            <div key={ind.id} className="p-4 bg-white/5 rounded-2xl border border-white/5 space-y-3">
+                            <div key={ind.id} className="p-4 bg-[var(--panel-bg)] rounded-2xl border border-[var(--panel-border)] space-y-3">
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
-                                  <ind.icon size={14} className="text-slate-500" />
-                                  <span className="text-xs font-bold text-white">{ind.label}</span>
+                                  <ind.icon size={14} className="text-[var(--slate-500)]" />
+                                  <span className="text-xs font-bold text-[var(--text)]">{ind.label}</span>
                                 </div>
                                 <div className="flex items-center gap-3 text-[10px] font-bold">
-                                  <span className="text-indigo-400">{(valA * 100).toFixed(0)}%</span>
-                                  <span className="text-slate-600">vs</span>
-                                  <span className="text-amber-400">{(valB * 100).toFixed(0)}%</span>
+                                  <span className="text-[var(--accent)]">{(valA * 100).toFixed(0)}%</span>
+                                  <span className="text-[var(--slate-600)]">vs</span>
+                                  <span className="text-[var(--status-amber)]">{(valB * 100).toFixed(0)}%</span>
                                 </div>
                               </div>
-                              <div className="h-1.5 bg-white/5 rounded-full overflow-hidden flex">
-                                <div className="h-full bg-indigo-500/50" style={{ width: `${valA * 100}%` }} />
-                                <div className="h-full bg-amber-500/50" style={{ width: `${valB * 100}%` }} />
+                              <div className="h-1.5 bg-[var(--panel-bg)] rounded-full overflow-hidden flex">
+                                <div className="h-full bg-[var(--accent)]/50" style={{ width: `${valA * 100}%` }} />
+                                <div className="h-full bg-[var(--status-amber)]/50" style={{ width: `${valB * 100}%` }} />
                               </div>
                               <p className={cn(
                                 "text-[10px] font-bold",
-                                diff > 0 ? "text-emerald-400" : diff < 0 ? "text-rose-400" : "text-slate-500"
+                                diff > 0 ? "text-[var(--status-emerald)]" : diff < 0 ? "text-[var(--status-rose)]" : "text-[var(--slate-500)]"
                               )}>
                                 {diff > 0 ? `+${diff.toFixed(1)}% Advantage A` : diff < 0 ? `${diff.toFixed(1)}% Advantage B` : 'Equal Performance'}
                               </p>
@@ -1144,11 +1166,11 @@ export default function App() {
                       </div>
                     </div>
                   ) : (
-                    <div className="p-8 border-2 border-dashed border-white/5 rounded-2xl text-center space-y-4">
-                      <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto">
-                        <BarChart3 size={32} className="text-slate-600" />
+                    <div className="p-8 border-2 border-dashed border-[var(--panel-border)] rounded-2xl text-center space-y-4">
+                      <div className="w-16 h-16 bg-[var(--panel-bg)] rounded-full flex items-center justify-center mx-auto">
+                        <BarChart3 size={32} className="text-[var(--slate-600)]" />
                       </div>
-                      <p className="text-slate-500 text-sm">Select two wards to begin comparison.</p>
+                      <p className="text-[var(--slate-500)] text-sm">Select two wards to begin comparison.</p>
                     </div>
                   )}
                 </div>
@@ -1164,23 +1186,23 @@ export default function App() {
                 className="space-y-8"
               >
                 <div className="space-y-4">
-                  <h2 className="text-xl font-bold text-white flex items-center gap-3">
-                    <Activity className="text-indigo-500" size={20} />
+                  <h2 className="text-xl font-bold text-[var(--text)] flex items-center gap-3">
+                    <Activity className="text-[var(--accent)]" size={20} />
                     Inequality Analysis
                   </h2>
-                  <p className="text-slate-400 text-sm">
-                    Comparing all wards reveals the "Mobility Gap". The chart below shows the distribution of scores for <span className="text-white font-bold">{INDICATORS.find(i => i.id === selectedIndicator)?.label}</span>.
+                  <p className="text-[var(--slate-400)] text-sm">
+                    Comparing all wards reveals the "Mobility Gap". The chart below shows the distribution of scores for <span className="text-[var(--text)] font-bold">{INDICATORS.find(i => i.id === selectedIndicator)?.label}</span>.
                   </p>
                 </div>
 
                 {inequalityData.length === 0 ? (
-                  <div className="p-8 border-2 border-dashed border-white/5 rounded-2xl text-center">
-                    <AlertCircle className="mx-auto text-slate-600 mb-3" size={32} />
-                    <p className="text-slate-500 text-sm">No mobility data available for comparison.</p>
+                  <div className="p-8 border-2 border-dashed border-[var(--panel-border)] rounded-2xl text-center">
+                    <AlertCircle className="mx-auto text-[var(--slate-600)] mb-3" size={32} />
+                    <p className="text-[var(--slate-500)] text-sm">No mobility data available for comparison.</p>
                   </div>
                 ) : (
                   <div className="space-y-8">
-                    <div className="h-64 w-full bg-white/5 rounded-2xl p-4">
+                    <div className="h-64 w-full bg-[var(--panel-bg)] rounded-2xl p-4">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={inequalityData.slice(0, 15)} layout="vertical">
                           <XAxis type="number" hide domain={[0, 100]} />
@@ -1188,13 +1210,13 @@ export default function App() {
                             dataKey="name" 
                             type="category" 
                             width={100} 
-                            tick={{ fill: '#94a3b8', fontSize: 10 }} 
+                            tick={{ fill: 'var(--slate-400)', fontSize: 10 }} 
                             axisLine={false}
                             tickLine={false}
                           />
                           <Tooltip 
-                            cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-                            contentStyle={{ backgroundColor: '#1a1a1a', border: 'none', borderRadius: '12px', fontSize: '12px' }}
+                            cursor={{ fill: 'var(--panel-bg)' }}
+                            contentStyle={{ backgroundColor: 'var(--bg)', border: 'none', borderRadius: '12px', fontSize: '12px' }}
                           />
                           <Bar dataKey="score" radius={[0, 4, 4, 0]}>
                             {inequalityData.map((entry, index) => (
@@ -1206,13 +1228,13 @@ export default function App() {
                     </div>
 
                     <div className="space-y-3">
-                      <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Full Ward Ranking</h3>
+                      <h3 className="text-[10px] font-bold text-[var(--slate-500)] uppercase tracking-widest">Full Ward Ranking</h3>
                       <div className="max-h-[400px] overflow-y-auto pr-2 space-y-2 custom-scrollbar">
                         {sortedWards.map((w, i) => (
-                          <div key={w.name} className="flex items-center justify-between p-3 bg-white/5 rounded-xl text-sm border border-white/5">
+                          <div key={w.name} className="flex items-center justify-between p-3 bg-[var(--panel-bg)] rounded-xl text-sm border border-[var(--panel-border)]">
                             <div className="flex items-center gap-3">
-                              <span className="text-[10px] font-bold text-slate-600 w-6">{i + 1}</span>
-                              <span className="font-medium text-slate-300">{w.name}</span>
+                              <span className="text-[10px] font-bold text-[var(--slate-600)] w-6">{i + 1}</span>
+                              <span className="font-medium text-[var(--slate-300)]">{w.name}</span>
                             </div>
                             <span className="font-mono font-bold" style={{ color: colorScale(w[selectedIndicator]) }}>
                               {(w[selectedIndicator] * 100).toFixed(0)}
@@ -1235,22 +1257,22 @@ export default function App() {
                 className="space-y-8"
               >
                 <div className="space-y-4">
-                  <h2 className="text-xl font-bold text-white flex items-center gap-3">
-                    <Activity className="text-indigo-500" size={20} />
+                  <h2 className="text-xl font-bold text-[var(--text)] flex items-center gap-3">
+                    <Activity className="text-[var(--accent)]" size={20} />
                     Policy Insights
                   </h2>
-                  <p className="text-slate-400 text-sm">
+                  <p className="text-[var(--slate-400)] text-sm">
                     Strategic recommendations aligned with Kochi's urban mobility missions.
                   </p>
                 </div>
 
-                <div className="p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl flex items-start gap-4">
-                  <div className="p-2 bg-indigo-500/20 rounded-lg text-indigo-400">
+                <div className="p-4 bg-[var(--accent-bg)] border border-[var(--accent)]/20 rounded-2xl flex items-start gap-4">
+                  <div className="p-2 bg-[var(--accent-bg)] rounded-lg text-[var(--accent)]">
                     <Activity size={18} />
                   </div>
                   <div>
-                    <h4 className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1">Spatial Pattern Observed</h4>
-                    <p className="text-sm font-bold text-white">
+                    <h4 className="text-[10px] font-bold text-[var(--accent)] uppercase tracking-widest mb-1">Spatial Pattern Observed</h4>
+                    <p className="text-sm font-bold text-[var(--text)]">
                       {sortedWards.length > 0 
                         ? (sortedWards.reduce((acc, w) => acc + w[selectedIndicator], 0) / sortedWards.length < 0.4 ? "Fragmented Accessibility" : (sortedWards.reduce((acc, w) => acc + w[selectedIndicator], 0) / sortedWards.length > 0.7 ? "Integrated Core" : "Developing Corridor"))
                         : "Insufficient Data"}
@@ -1258,47 +1280,47 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="p-6 bg-white/5 rounded-2xl border border-white/5 space-y-4">
+                <div className="p-6 bg-[var(--panel-bg)] rounded-2xl border border-[var(--panel-border)] space-y-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">City-Wide AI Summary</h3>
+                    <h3 className="text-[10px] font-bold text-[var(--slate-500)] uppercase tracking-widest">City-Wide AI Summary</h3>
                     <div className="flex items-center gap-2">
-                      {isGeneratingSummary && <Loader2 size={12} className="animate-spin text-indigo-400" />}
+                      {isGeneratingSummary && <Loader2 size={12} className="animate-spin text-[var(--accent)]" />}
                       <button 
                         onClick={generateCitySummary}
                         disabled={isGeneratingSummary}
-                        className="p-1.5 hover:bg-white/10 rounded-lg text-slate-500 transition-colors"
+                        className="p-1.5 hover:bg-[var(--panel-bg)] rounded-lg text-[var(--slate-500)] transition-colors"
                       >
                         <RefreshCcw size={12} />
                       </button>
                     </div>
                   </div>
                   {aiSummary ? (
-                    <p className="text-sm text-slate-300 leading-relaxed">
+                    <p className="text-sm text-[var(--slate-300)] leading-relaxed">
                       "{aiSummary}"
                     </p>
                   ) : (
                     <div className="h-12 flex items-center justify-center">
-                      <p className="text-[10px] text-slate-600">Generating observatory summary...</p>
+                      <p className="text-[10px] text-[var(--slate-600)]">Generating observatory summary...</p>
                     </div>
                   )}
                 </div>
 
                 {policyInsights.length === 0 ? (
-                  <div className="p-8 border-2 border-dashed border-white/5 rounded-2xl text-center">
-                    <AlertCircle className="mx-auto text-slate-600 mb-3" size={32} />
-                    <p className="text-slate-500 text-sm">Insufficient data to generate policy insights.</p>
+                  <div className="p-8 border-2 border-dashed border-[var(--panel-border)] rounded-2xl text-center">
+                    <AlertCircle className="mx-auto text-[var(--slate-600)] mb-3" size={32} />
+                    <p className="text-[var(--slate-500)] text-sm">Insufficient data to generate policy insights.</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
                     {policyInsights.map((insight, i) => (
-                      <div key={i} className="p-5 bg-white/5 rounded-2xl border border-white/5 space-y-3">
+                      <div key={i} className="p-5 bg-[var(--panel-bg)] rounded-2xl border border-[var(--panel-border)] space-y-3">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-indigo-500/20 text-indigo-400 rounded-lg flex items-center justify-center font-bold text-sm">
+                          <div className="w-8 h-8 bg-[var(--accent-bg)] text-[var(--accent)] rounded-lg flex items-center justify-center font-bold text-sm">
                             {i + 1}
                           </div>
-                          <h3 className="font-bold text-white">{insight.title}</h3>
+                          <h3 className="font-bold text-[var(--text)]">{insight.title}</h3>
                         </div>
-                        <p className="text-slate-400 text-xs leading-relaxed">
+                        <p className="text-[var(--slate-400)] text-xs leading-relaxed">
                           {insight.text}
                         </p>
                       </div>
@@ -1307,25 +1329,25 @@ export default function App() {
                 )}
 
                 <div className="space-y-4">
-                  <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Strategic Alignment</h3>
+                  <h3 className="text-[10px] font-bold text-[var(--slate-500)] uppercase tracking-widest">Strategic Alignment</h3>
                   <div className="grid grid-cols-1 gap-2">
                     {[
-                      { name: "Kochi Water Metro", status: "In Progress", color: "text-emerald-400", bg: "bg-emerald-500/10" },
-                      { name: "UMTA Kochi Act", status: "Enacted", color: "text-blue-400", bg: "bg-blue-500/10" },
-                      { name: "Metro Phase 2 (Kakkanad)", status: "Planned", color: "text-amber-400", bg: "bg-amber-500/10" },
-                      { name: "Rebuild Kerala Initiative", status: "Active", color: "text-indigo-400", bg: "bg-indigo-500/10" }
+                      { name: "Kochi Water Metro", status: "In Progress", color: "text-[var(--status-emerald)]", bg: "bg-[var(--status-emerald-bg)]" },
+                      { name: "UMTA Kochi Act", status: "Enacted", color: "text-[var(--status-blue)]", bg: "bg-[var(--status-blue-bg)]" },
+                      { name: "Metro Phase 2 (Kakkanad)", status: "Planned", color: "text-[var(--status-amber)]", bg: "bg-[var(--status-amber-bg)]" },
+                      { name: "Rebuild Kerala Initiative", status: "Active", color: "text-[var(--accent)]", bg: "bg-[var(--accent-bg)]" }
                     ].map((mission) => (
-                      <div key={mission.name} className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
-                        <span className="text-xs font-medium text-slate-300">{mission.name}</span>
+                      <div key={mission.name} className="flex items-center justify-between p-3 bg-[var(--panel-bg)] rounded-xl border border-[var(--panel-border)]">
+                        <span className="text-xs font-medium text-[var(--slate-300)]">{mission.name}</span>
                         <span className={cn("px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider", mission.bg, mission.color)}>{mission.status}</span>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                <div className="p-6 bg-indigo-600/10 border border-indigo-500/20 rounded-2xl">
-                  <h4 className="text-indigo-400 font-bold text-[10px] uppercase tracking-widest mb-2">Strategic Goal</h4>
-                  <p className="text-white text-sm font-bold leading-relaxed">
+                <div className="p-6 bg-[var(--accent)]/10 border border-[var(--accent)]/20 rounded-2xl">
+                  <h4 className="text-[var(--accent)] font-bold text-[10px] uppercase tracking-widest mb-2">Strategic Goal</h4>
+                  <p className="text-[var(--text)] text-sm font-bold leading-relaxed">
                     "To achieve a minimum mobility score of 70% across all 74 wards by 2030 through targeted infrastructure investment."
                   </p>
                 </div>
@@ -1341,11 +1363,11 @@ export default function App() {
                 className="space-y-8"
               >
                 <div className="space-y-4">
-                  <h2 className="text-xl font-bold text-white flex items-center gap-3">
-                    <BookOpen className="text-indigo-500" size={20} />
+                  <h2 className="text-xl font-bold text-[var(--text)] flex items-center gap-3">
+                    <BookOpen className="text-[var(--accent)]" size={20} />
                     Methodology
                   </h2>
-                  <p className="text-slate-400 text-sm">
+                  <p className="text-[var(--slate-400)] text-sm">
                     The observatory uses three composite indices to evaluate urban mobility at the ward level.
                   </p>
                 </div>
@@ -1361,7 +1383,7 @@ export default function App() {
                         key={indicator.id} 
                         className={cn(
                           "rounded-2xl transition-all duration-300 overflow-hidden border",
-                          isExpanded ? "bg-white/5 border-white/10" : "bg-transparent border-white/5"
+                          isExpanded ? "bg-[var(--panel-bg)] border-[var(--panel-border)]" : "bg-transparent border-[var(--panel-border)]"
                         )}
                       >
                         <button
@@ -1369,17 +1391,17 @@ export default function App() {
                           className="w-full p-5 flex items-center justify-between text-left"
                         >
                           <div className="flex items-center gap-4">
-                            <div className="p-2 rounded-lg bg-white/5 text-slate-500" style={{ color: isExpanded ? indicator.color : undefined }}>
+                            <div className="p-2 rounded-lg bg-[var(--panel-bg)] text-[var(--slate-500)]" style={{ color: isExpanded ? indicator.color : undefined }}>
                               <Icon size={20} />
                             </div>
                             <div>
-                              <h3 className="text-sm font-bold text-white">{indicator.label}</h3>
-                              <p className="text-[10px] text-slate-500 font-mono uppercase tracking-widest">{indicator.id.replace('_', ' ')}</p>
+                              <h3 className="text-sm font-bold text-[var(--text)]">{indicator.label}</h3>
+                              <p className="text-[10px] text-[var(--slate-500)] font-mono uppercase tracking-widest">{indicator.id.replace('_', ' ')}</p>
                             </div>
                           </div>
                           <ChevronDown 
                             size={16} 
-                            className={cn("text-slate-600 transition-transform", isExpanded && "rotate-180")} 
+                            className={cn("text-[var(--slate-600)] transition-transform", isExpanded && "rotate-180")} 
                           />
                         </button>
 
@@ -1391,19 +1413,19 @@ export default function App() {
                               exit={{ height: 0, opacity: 0 }}
                               className="px-5 pb-5 space-y-6"
                             >
-                              <div className="h-px bg-white/5 w-full" />
+                               <div className="h-px bg-[var(--panel-border)] w-full" />
                               
                               <div className="space-y-2">
-                                <h4 className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Objective</h4>
-                                <p className="text-slate-300 text-xs leading-relaxed">{data.objective}</p>
+                                <h4 className="text-[10px] font-bold text-[var(--accent)] uppercase tracking-widest">Objective</h4>
+                                <p className="text-[var(--slate-300)] text-xs leading-relaxed">{data.objective}</p>
                               </div>
 
                               <div className="space-y-3">
-                                <h4 className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Variables</h4>
+                                <h4 className="text-[10px] font-bold text-[var(--accent)] uppercase tracking-widest">Variables</h4>
                                 <ul className="grid grid-cols-1 gap-2">
                                   {data.variables.map((v, i) => (
-                                    <li key={i} className="flex items-center gap-2 text-slate-400 text-xs p-2 bg-white/5 rounded-lg">
-                                      <div className="w-1 h-1 bg-indigo-500 rounded-full" />
+                                    <li key={i} className="flex items-center gap-2 text-[var(--slate-400)] text-xs p-2 bg-[var(--panel-bg)] rounded-lg">
+                                      <div className="w-1 h-1 bg-[var(--accent)] rounded-full" />
                                       {v}
                                     </li>
                                   ))}
@@ -1412,20 +1434,20 @@ export default function App() {
 
                               <div className="grid grid-cols-2 gap-6">
                                 <div className="space-y-2">
-                                  <h4 className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Interpretation</h4>
-                                  <p className="text-slate-400 text-[10px] leading-relaxed">{data.interpretation}</p>
+                                  <h4 className="text-[10px] font-bold text-[var(--accent)] uppercase tracking-widest">Interpretation</h4>
+                                  <p className="text-[var(--slate-400)] text-[10px] leading-relaxed">{data.interpretation}</p>
                                 </div>
                                 <div className="space-y-2">
-                                  <h4 className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Policy Relevance</h4>
-                                  <p className="text-slate-400 text-[10px] leading-relaxed">{data.policyRelevance}</p>
+                                  <h4 className="text-[10px] font-bold text-[var(--accent)] uppercase tracking-widest">Policy Relevance</h4>
+                                  <p className="text-[var(--slate-400)] text-[10px] leading-relaxed">{data.policyRelevance}</p>
                                 </div>
                               </div>
 
                               <div className="space-y-3">
-                                <h4 className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">References</h4>
+                                <h4 className="text-[10px] font-bold text-[var(--accent)] uppercase tracking-widest">References</h4>
                                 <div className="flex flex-wrap gap-2">
                                   {data.references.map((ref, i) => (
-                                    <span key={i} className="px-2 py-1 bg-white/5 rounded text-[9px] font-mono text-slate-500 border border-white/10">
+                                    <span key={i} className="px-2 py-1 bg-[var(--panel-bg)] rounded text-[9px] font-mono text-[var(--slate-500)] border border-[var(--panel-border)]">
                                       {ref}
                                     </span>
                                   ))}
@@ -1439,12 +1461,12 @@ export default function App() {
                   })}
                 </div>
 
-                <div className="p-6 bg-indigo-600/10 border border-indigo-500/20 rounded-2xl space-y-3">
-                  <div className="flex items-center gap-2 text-indigo-400">
+                <div className="p-6 bg-[var(--accent)]/10 border border-[var(--accent)]/20 rounded-2xl space-y-3">
+                  <div className="flex items-center gap-2 text-[var(--accent)]">
                     <BookOpen size={16} />
                     <h4 className="font-bold text-xs uppercase tracking-widest">Methodological Note</h4>
                   </div>
-                  <p className="text-white text-xs leading-relaxed">
+                  <p className="text-[var(--text)] text-xs leading-relaxed">
                     All indicators are normalized on a scale of 0-100, where 100 represents the optimal accessibility benchmark defined by international standards (e.g., 400m walking distance to transit). Data is updated quarterly using open-source spatial datasets and municipal records.
                   </p>
                 </div>
@@ -1460,52 +1482,52 @@ export default function App() {
                 className="space-y-8"
               >
                 <div className="space-y-4">
-                  <h2 className="text-xl font-bold text-white flex items-center gap-3">
-                    <Activity className="text-indigo-500" size={20} />
+                  <h2 className="text-xl font-bold text-[var(--text)] flex items-center gap-3">
+                    <Activity className="text-[var(--accent)]" size={20} />
                     Data Coverage
                   </h2>
-                  <p className="text-slate-400 text-sm">
+                  <p className="text-[var(--slate-400)] text-sm">
                     Overview of data availability across Kochi's 74 wards.
                   </p>
                 </div>
 
                 <div className="space-y-4">
                   {coverageStats.map((stat) => (
-                    <div key={stat.id} className="p-6 bg-white/5 rounded-2xl border border-white/5 space-y-4">
+                    <div key={stat.id} className="p-6 bg-[var(--panel-bg)] rounded-2xl border border-[var(--panel-border)] space-y-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-lg bg-white/5 text-indigo-400">
+                          <div className="p-2 rounded-lg bg-[var(--panel-bg)] text-[var(--accent)]">
                             <stat.icon size={18} />
                           </div>
-                          <h3 className="font-bold text-white text-sm">{stat.label}</h3>
+                          <h3 className="font-bold text-[var(--text)] text-sm">{stat.label}</h3>
                         </div>
-                        <span className="text-[10px] font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded uppercase tracking-widest">
+                        <span className="text-[10px] font-bold text-[var(--accent)] bg-[var(--accent-bg)] px-2 py-0.5 rounded uppercase tracking-widest">
                           {stat.percentage.toFixed(0)}%
                         </span>
                       </div>
 
                       <div className="space-y-2">
-                        <div className="flex justify-between text-[10px] font-bold text-slate-500">
+                        <div className="flex justify-between text-[10px] font-bold text-[var(--slate-500)]">
                           <span>Wards with Data</span>
                           <span>{stat.withData} / 74</span>
                         </div>
-                        <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                        <div className="h-1.5 bg-[var(--panel-bg)] rounded-full overflow-hidden">
                           <motion.div 
                             initial={{ width: 0 }}
                             animate={{ width: `${stat.percentage}%` }}
-                            className="h-full bg-indigo-500"
+                            className="h-full bg-[var(--accent)]"
                           />
                         </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
-                        <div className="p-3 bg-white/5 rounded-xl border border-white/5">
-                          <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Available</p>
-                          <p className="text-xl font-bold text-emerald-400">{stat.withData}</p>
+                        <div className="p-3 bg-[var(--panel-bg)] rounded-xl border border-[var(--panel-border)]">
+                          <p className="text-[9px] font-bold text-[var(--slate-500)] uppercase tracking-widest mb-1">Available</p>
+                          <p className="text-xl font-bold text-[var(--status-emerald)]">{stat.withData}</p>
                         </div>
-                        <div className="p-3 bg-white/5 rounded-xl border border-white/5">
-                          <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Missing</p>
-                          <p className="text-xl font-bold text-rose-400">{stat.withoutData}</p>
+                        <div className="p-3 bg-[var(--panel-bg)] rounded-xl border border-[var(--panel-border)]">
+                          <p className="text-[9px] font-bold text-[var(--slate-500)] uppercase tracking-widest mb-1">Missing</p>
+                          <p className="text-xl font-bold text-[var(--status-rose)]">{stat.withoutData}</p>
                         </div>
                       </div>
                     </div>
@@ -1523,17 +1545,17 @@ export default function App() {
               >
                 <div className="space-y-8">
                   <div className="space-y-4">
-                    <h2 className="text-2xl font-bold text-white leading-tight">
-                      Data Sources, <span className="text-indigo-400">Assumptions</span> & Limitations
+                    <h2 className="text-2xl font-bold text-[var(--text)] leading-tight">
+                      Data Sources, <span className="text-[var(--accent)]">Assumptions</span> & Limitations
                     </h2>
                     
-                    <p className="text-slate-400 text-[13px] leading-relaxed">
+                    <p className="text-[var(--slate-400)] text-[13px] leading-relaxed">
                       This dashboard evaluates spatial accessibility to urban transport infrastructure in Kochi using three primary indicators:
                     </p>
 
                     <div className="flex flex-wrap gap-2 mb-6">
                       {['Bus Stop Access Index', 'Walkability Index', 'Last Mile Connectivity Index'].map(tag => (
-                        <span key={tag} className="px-3 py-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-[9px] font-mono font-bold text-indigo-400 uppercase tracking-widest">
+                        <span key={tag} className="px-3 py-1.5 bg-[var(--accent-bg)] border border-[var(--accent)]/20 rounded-full text-[9px] font-mono font-bold text-[var(--accent)] uppercase tracking-widest">
                           {tag}
                         </span>
                       ))}
@@ -1541,8 +1563,8 @@ export default function App() {
 
                     <div className="space-y-10">
                       <section className="space-y-4">
-                        <h3 className="text-[9px] font-mono font-medium text-slate-500 uppercase tracking-[0.3em] flex items-center gap-3">
-                          <div className="w-1 h-1 bg-indigo-500 rounded-full" />
+                        <h3 className="text-[9px] font-mono font-medium text-[var(--slate-500)] uppercase tracking-[0.3em] flex items-center gap-3">
+                          <div className="w-1 h-1 bg-[var(--accent)] rounded-full" />
                           1. Data Sources
                         </h3>
                         <div className="grid grid-cols-1 gap-3">
@@ -1551,56 +1573,56 @@ export default function App() {
                             { label: 'OpenStreetMap Road Network', desc: 'Street-level connectivity and pedestrian paths.' },
                             { label: 'Public Transport Stop Data', desc: 'Locations of bus stops and transit nodes.' }
                           ].map(item => (
-                            <div key={item.label} className="p-5 glass-panel rounded-2xl border border-white/5 group hover:border-indigo-500/30 transition-all">
-                              <p className="text-xs font-bold text-white mb-1 tracking-tight">{item.label}</p>
-                              <p className="text-[11px] text-slate-500 leading-relaxed">{item.desc}</p>
+                            <div key={item.label} className="p-5 glass-panel rounded-2xl border border-[var(--panel-border)] group hover:border-[var(--accent)]/30 transition-all">
+                              <p className="text-xs font-bold text-[var(--text)] mb-1 tracking-tight">{item.label}</p>
+                              <p className="text-[11px] text-[var(--slate-500)] leading-relaxed">{item.desc}</p>
                             </div>
                           ))}
                         </div>
                       </section>
 
                       <section className="space-y-4">
-                        <h3 className="text-[9px] font-mono font-medium text-slate-500 uppercase tracking-[0.3em] flex items-center gap-3">
-                          <div className="w-1 h-1 bg-indigo-500 rounded-full" />
+                        <h3 className="text-[9px] font-mono font-medium text-[var(--slate-500)] uppercase tracking-[0.3em] flex items-center gap-3">
+                          <div className="w-1 h-1 bg-[var(--accent)] rounded-full" />
                           2. Analytical Scope
                         </h3>
-                        <div className="p-6 glass-panel rounded-2xl border border-white/5">
-                          <p className="text-slate-400 text-[13px] leading-relaxed">
-                            The analysis measures <span className="text-white font-medium">accessibility to mobility infrastructure</span> rather than complete mobility performance. It focuses on the physical availability and spatial distribution of assets.
+                        <div className="p-6 glass-panel rounded-2xl border border-[var(--panel-border)]">
+                          <p className="text-[var(--slate-400)] text-[13px] leading-relaxed">
+                            The analysis measures <span className="text-[var(--text)] font-medium">accessibility to mobility infrastructure</span> rather than complete mobility performance. It focuses on the physical availability and spatial distribution of assets.
                           </p>
                         </div>
                       </section>
 
                       <section className="space-y-4">
-                        <h3 className="text-[9px] font-mono font-medium text-slate-500 uppercase tracking-[0.3em] flex items-center gap-3">
-                          <div className="w-1 h-1 bg-indigo-500 rounded-full" />
+                        <h3 className="text-[9px] font-mono font-medium text-[var(--slate-500)] uppercase tracking-[0.3em] flex items-center gap-3">
+                          <div className="w-1 h-1 bg-[var(--accent)] rounded-full" />
                           3. Key Assumptions
                         </h3>
-                        <div className="p-6 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl">
-                          <p className="text-slate-300 text-[13px] leading-relaxed">
+                        <div className="p-6 bg-[var(--accent)]/5 border border-[var(--accent)]/10 rounded-2xl">
+                          <p className="text-[var(--slate-300)] text-[13px] leading-relaxed">
                             "Accessibility improves when infrastructure is physically closer to residents and better connected through a high-quality street network."
                           </p>
                         </div>
                       </section>
 
                       <section className="space-y-4">
-                        <h3 className="text-[9px] font-mono font-medium text-slate-500 uppercase tracking-[0.3em] flex items-center gap-3">
-                          <div className="w-1 h-1 bg-indigo-500 rounded-full" />
+                        <h3 className="text-[9px] font-mono font-medium text-[var(--slate-500)] uppercase tracking-[0.3em] flex items-center gap-3">
+                          <div className="w-1 h-1 bg-[var(--accent)] rounded-full" />
                           4. Limitations
                         </h3>
                         <div className="space-y-4">
-                          <p className="text-slate-400 text-[13px] leading-relaxed">
+                          <p className="text-[var(--slate-400)] text-[13px] leading-relaxed">
                             While comprehensive, this spatial analysis has specific boundaries:
                           </p>
                           <ul className="grid grid-cols-2 gap-3">
                             {['Travel Time', 'Congestion', 'Transit Frequency', 'Demand Patterns'].map(limit => (
-                              <li key={limit} className="flex items-center gap-3 text-[11px] font-mono text-slate-500 p-3 bg-white/5 rounded-xl border border-white/5">
-                                <div className="w-1 h-1 bg-slate-700 rounded-full" />
+                              <li key={limit} className="flex items-center gap-3 text-[11px] font-mono text-[var(--slate-500)] p-3 bg-[var(--panel-bg)] rounded-xl border border-[var(--panel-border)]">
+                                <div className="w-1 h-1 bg-[var(--slate-600)] rounded-full" />
                                 {limit}
                               </li>
                             ))}
                           </ul>
-                          <p className="text-[10px] text-slate-600 mt-2">
+                          <p className="text-[10px] text-[var(--slate-600)] mt-2">
                             * These factors are excluded to maintain a focus on long-term infrastructure planning.
                           </p>
                         </div>
@@ -1620,60 +1642,60 @@ export default function App() {
               >
                 <div className="space-y-6">
                   <div className="space-y-4">
-                    <h2 className="text-2xl font-bold text-white">
+                    <h2 className="text-2xl font-bold text-[var(--text)]">
                       Kochi Accessibility Observatory
                     </h2>
-                    <p className="text-slate-400 text-sm leading-relaxed">
+                    <p className="text-[var(--slate-400)] text-sm leading-relaxed">
                       A data-driven platform for analyzing and improving urban mobility infrastructure in Kochi, Kerala.
                     </p>
                   </div>
 
                   <div className="space-y-8">
                     <section className="space-y-3">
-                      <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Project Mission</h3>
-                      <p className="text-slate-400 text-sm leading-relaxed">
+                      <h3 className="text-[10px] font-bold text-[var(--slate-500)] uppercase tracking-widest">Project Mission</h3>
+                      <p className="text-[var(--slate-400)] text-sm leading-relaxed">
                         The observatory aims to provide urban planners, researchers, and citizens with a transparent view of how accessible transport infrastructure is across different municipal wards.
                       </p>
                     </section>
 
                     <section className="space-y-3">
-                      <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Indicators Used</h3>
+                      <h3 className="text-[10px] font-bold text-[var(--slate-500)] uppercase tracking-widest">Indicators Used</h3>
                       <div className="space-y-3">
-                        <div className="p-5 bg-white/5 rounded-2xl border border-white/5">
-                          <p className="text-xs font-bold text-white mb-1">Bus Stop Access</p>
-                          <p className="text-[11px] text-slate-500">Measures spatial proximity to the bus network, considering stop density and service frequency.</p>
+                        <div className="p-5 bg-[var(--panel-bg)] rounded-2xl border border-[var(--panel-border)]">
+                          <p className="text-xs font-bold text-[var(--text)] mb-1">Bus Stop Access</p>
+                          <p className="text-[11px] text-[var(--slate-500)]">Measures spatial proximity to the bus network, considering stop density and service frequency.</p>
                         </div>
-                        <div className="p-5 bg-white/5 rounded-2xl border border-white/5">
-                          <p className="text-xs font-bold text-white mb-1">Walkability Index</p>
-                          <p className="text-[11px] text-slate-500">Evaluates the quality of the pedestrian environment, including sidewalk availability and safety.</p>
+                        <div className="p-5 bg-[var(--panel-bg)] rounded-2xl border border-[var(--panel-border)]">
+                          <p className="text-xs font-bold text-[var(--text)] mb-1">Walkability Index</p>
+                          <p className="text-[11px] text-[var(--slate-500)]">Evaluates the quality of the pedestrian environment, including sidewalk availability and safety.</p>
                         </div>
-                        <div className="p-5 bg-white/5 rounded-2xl border border-white/5">
-                          <p className="text-xs font-bold text-white mb-1">Last Mile Connectivity</p>
-                          <p className="text-[11px] text-slate-500">Assesses the ease of completing the final leg of a journey from major transit hubs.</p>
+                        <div className="p-5 bg-[var(--panel-bg)] rounded-2xl border border-[var(--panel-border)]">
+                          <p className="text-xs font-bold text-[var(--text)] mb-1">Last Mile Connectivity</p>
+                          <p className="text-[11px] text-[var(--slate-500)]">Assesses the ease of completing the final leg of a journey from major transit hubs.</p>
                         </div>
                       </div>
                     </section>
                   </div>
 
-                  <div className="pt-8 border-t border-white/5 space-y-8">
+                  <div className="pt-8 border-t border-[var(--panel-border)] space-y-8">
                     <div className="grid grid-cols-1 gap-6">
                       <div className="space-y-3">
-                        <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Developed By</h4>
+                        <h4 className="text-[10px] font-bold text-[var(--slate-500)] uppercase tracking-widest">Developed By</h4>
                         <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold">
+                          <div className="w-10 h-10 rounded-full bg-[var(--accent-bg)] border border-[var(--accent)]/20 flex items-center justify-center text-[var(--accent)] font-bold">
                             PA
                           </div>
                           <div>
-                            <p className="text-sm font-bold text-white">Pranav Alok</p>
+                            <p className="text-sm font-bold text-[var(--text)]">Pranav Alok</p>
                           </div>
                         </div>
                       </div>
 
                       <div className="space-y-3">
-                        <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Data Sources</h4>
+                        <h4 className="text-[10px] font-bold text-[var(--slate-500)] uppercase tracking-widest">Data Sources</h4>
                         <div className="flex flex-wrap gap-2">
                           {['Field Survey', 'OpenStreetMap', 'Kochi Ward Boundaries'].map(source => (
-                            <span key={source} className="px-2 py-1 bg-white/5 border border-white/10 rounded text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                            <span key={source} className="px-2 py-1 bg-[var(--panel-bg)] border border-[var(--panel-border)] rounded text-[9px] font-bold text-[var(--slate-400)] uppercase tracking-widest">
                               {source}
                             </span>
                           ))}
@@ -1681,10 +1703,10 @@ export default function App() {
                       </div>
 
                       <div className="space-y-3">
-                        <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Contact</h4>
+                        <h4 className="text-[10px] font-bold text-[var(--slate-500)] uppercase tracking-widest">Contact</h4>
                         <a 
                           href="mailto:pranavalok108@gmail.com" 
-                          className="inline-flex items-center gap-2 text-indigo-400 hover:text-indigo-300 transition-colors text-xs font-bold"
+                          className="inline-flex items-center gap-2 text-[var(--accent)] hover:opacity-80 transition-colors text-xs font-bold"
                         >
                           pranavalok108@gmail.com
                           <ArrowUpRight size={14} />
@@ -1692,8 +1714,8 @@ export default function App() {
                       </div>
                     </div>
 
-                    <div className="p-4 bg-indigo-500/5 rounded-2xl border border-indigo-500/10">
-                      <p className="text-[11px] text-slate-500 leading-relaxed">
+                    <div className="p-4 bg-[var(--accent-bg)]/50 rounded-2xl border border-[var(--accent)]/10">
+                      <p className="text-[11px] text-[var(--slate-500)] leading-relaxed">
                         "This observatory is an ongoing urban analytics project aimed at improving the quality of life in Kochi through data-driven mobility planning."
                       </p>
                     </div>
@@ -1706,7 +1728,7 @@ export default function App() {
       </aside>
 
       {/* Map Area */}
-      <main className="flex-1 relative bg-[#111]">
+      <main className="flex-1 relative bg-[var(--bg)]">
         <MapContainer 
           center={[9.98, 76.28]} 
           zoom={12} 
@@ -1715,7 +1737,10 @@ export default function App() {
         >
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            url={theme === 'dark' 
+              ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+              : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+            }
           />
           <GeoJSON 
             key={`${selectedIndicator}-${selectedWard?.name}-${dataTimestamp}`}
@@ -1727,7 +1752,7 @@ export default function App() {
           {/* Map Overlay UI */}
           <div className="absolute top-8 right-8 flex flex-col gap-4 z-[1000]">
             {loading && (
-              <div className="bg-indigo-600 text-white px-4 py-2 rounded-full text-[10px] font-bold tracking-widest flex items-center gap-2 shadow-2xl">
+              <div className="bg-[var(--accent)] text-white px-4 py-2 rounded-full text-[10px] font-bold tracking-widest flex items-center gap-2 shadow-2xl">
                 <Loader2 size={12} className="animate-spin" />
                 SYNCHRONIZING REAL-TIME DATA
               </div>
@@ -1735,14 +1760,14 @@ export default function App() {
           </div>
 
           {/* Legend */}
-          <div className="absolute bottom-8 right-8 bg-[#1a1a1a]/80 backdrop-blur-xl p-6 rounded-2xl shadow-2xl border border-white/5 z-[1000] min-w-[240px]">
-            <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mb-4">
+          <div className="absolute bottom-8 right-8 bg-[var(--bg)]/80 backdrop-blur-xl p-6 rounded-2xl shadow-2xl border border-[var(--panel-border)] z-[1000] min-w-[240px]">
+            <h4 className="text-[10px] font-bold text-[var(--slate-500)] uppercase tracking-[0.2em] mb-4">
               {INDICATORS.find(i => i.id === selectedIndicator)?.label}
             </h4>
             <div className="flex items-center gap-3 mb-3">
               <div className="flex-1 h-2 rounded-full bg-gradient-to-r from-[#ffffd9] via-[#7fcdbb] to-[#081d58]" />
             </div>
-            <div className="flex justify-between text-[10px] font-bold text-slate-500">
+            <div className="flex justify-between text-[10px] font-bold text-[var(--slate-500)]">
               <span>LOW ACCESS</span>
               <span>HIGH ACCESS</span>
             </div>
@@ -1761,11 +1786,11 @@ export default function App() {
                   top: mousePos.y + 20,
                   pointerEvents: 'none'
                 }}
-                className="bg-[#1a1a1a]/95 backdrop-blur-2xl text-white p-5 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/10 z-[2000] min-w-[200px]"
+                className="bg-[var(--bg)]/95 backdrop-blur-2xl text-[var(--text)] p-5 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-[var(--panel-border)] z-[2000] min-w-[200px]"
               >
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-[10px] text-slate-500 uppercase font-black tracking-[0.2em]">Ward Profile</span>
-                  <div className="px-2 py-0.5 bg-indigo-500/20 rounded text-[9px] font-bold text-indigo-400 border border-indigo-500/20">
+                  <span className="text-[10px] text-[var(--slate-500)] uppercase font-black tracking-[0.2em]">Ward Profile</span>
+                  <div className="px-2 py-0.5 bg-[var(--accent-bg)] rounded text-[9px] font-bold text-[var(--accent)] border border-[var(--accent)]/20">
                     LIVE DATA
                   </div>
                 </div>
@@ -1776,12 +1801,12 @@ export default function App() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className={cn(
-                        "w-1.5 h-1.5 rounded-full shadow-[0_0_8px_rgba(99,102,241,0.8)]",
-                        hoveredWard[selectedIndicator] !== null ? "bg-indigo-500" : "bg-slate-600"
+                        "w-1.5 h-1.5 rounded-full shadow-[0_0_8px_var(--accent-bg)]",
+                        hoveredWard[selectedIndicator] !== null ? "bg-[var(--accent)]" : "bg-[var(--slate-600)]"
                       )} />
-                      <span className="text-xs text-slate-400">{INDICATORS.find(i => i.id === selectedIndicator)?.label}</span>
+                      <span className="text-xs text-[var(--slate-400)]">{INDICATORS.find(i => i.id === selectedIndicator)?.label}</span>
                     </div>
-                    <span className="font-mono font-bold text-white">
+                    <span className="font-mono font-bold text-[var(--text)]">
                       {hoveredWard[selectedIndicator] !== null 
                         ? `${(hoveredWard[selectedIndicator] * 100).toFixed(1)}%` 
                         : 'No Data'}
@@ -1789,21 +1814,21 @@ export default function App() {
                   </div>
                   
                   {hoveredWard[selectedIndicator] !== null ? (
-                    <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                    <div className="w-full h-1 bg-[var(--panel-bg)] rounded-full overflow-hidden">
                       <motion.div 
                         initial={{ width: 0 }}
                         animate={{ width: `${hoveredWard[selectedIndicator] * 100}%` }}
-                        className="h-full bg-gradient-to-r from-indigo-600 to-violet-400"
+                        className="h-full bg-[var(--accent)]"
                       />
                     </div>
                   ) : (
-                    <div className="w-full h-1 bg-white/10 rounded-full" />
+                    <div className="w-full h-1 bg-[var(--panel-bg)] rounded-full" />
                   )}
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between">
-                  <span className="text-[9px] text-slate-500 font-medium">Click to view diagnostics</span>
-                  <ArrowUpRight size={12} className="text-slate-600" />
+                <div className="mt-4 pt-3 border-t border-[var(--panel-border)] flex items-center justify-between">
+                  <span className="text-[9px] text-[var(--slate-500)] font-medium">Click to view diagnostics</span>
+                  <ArrowUpRight size={12} className="text-[var(--slate-600)]" />
                 </div>
               </motion.div>
             )}
