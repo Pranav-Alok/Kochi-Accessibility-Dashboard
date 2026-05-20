@@ -54,7 +54,7 @@ import { KOCHI_WARDS_GEOJSON as INITIAL_DATA } from './data/kochi-wards';
 import { scaleSequential } from 'd3-scale';
 import { interpolateYlGnBu } from 'd3-scale-chromatic';
 import { GoogleGenAI } from "@google/genai";
-import shp from 'shpjs';
+import shp, { parseShp, parseDbf, combine } from 'shpjs';
 import { Buffer } from 'buffer';
 
 // Utility for tailwind classes
@@ -177,15 +177,11 @@ const METHODOLOGY_DATA = {
 
 export default function App() {
   const [activeSection, setActiveSection] = useState<Section>('about');
-  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
-
-  useEffect(() => {
-    if (theme === 'light') {
-      document.documentElement.classList.add('light');
-    } else {
-      document.documentElement.classList.remove('light');
-    }
-  }, [theme]);
+  // Custom uploaded datasets with persistence
+  const [customRoutes, setCustomRoutes] = useState<any>(null);
+  const [customBusStops, setCustomBusStops] = useState<any>(null);
+  const routeInputRef = useRef<HTMLInputElement>(null);
+  const busStopInputRef = useRef<HTMLInputElement>(null);
 
   const [selectedIndicator, setSelectedIndicator] = useState<Indicator>('bus_access');
   const [selectedWard, setSelectedWard] = useState<any>(null);
@@ -197,7 +193,7 @@ export default function App() {
   const calculateCompositeScores = (data: any) => {
     return {
       ...data,
-      features: data.features.map((f: any) => {
+      features: (data.features || []).map((f: any) => {
         const p = f.properties;
         const bus = p.bus_access ?? null;
         const walk = p.walkability ?? null;
@@ -225,35 +221,26 @@ export default function App() {
   const sidebarRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch real boundaries from GitHub Shapefile
+  // Load shapefile and other data from localStorage on mount
   useEffect(() => {
-    async function fetchRealBoundaries() {
-      setLoading(true);
-      try {
-        // Fetch shapefile from GitHub
-        const baseUrl = 'https://raw.githubusercontent.com/Pranav-Alok/kochi-mobility-dashboard/main/spatial/kochi_wards/kochi_wards';
-        
-        const [shpBuffer, dbfBuffer, prjBuffer, cpgBuffer] = await Promise.all([
-          fetch(`${baseUrl}.shp`).then(res => res.arrayBuffer()),
-          fetch(`${baseUrl}.dbf`).then(res => res.arrayBuffer()),
-          fetch(`${baseUrl}.prj`).then(res => res.arrayBuffer()),
-          fetch(`${baseUrl}.cpg`).then(res => res.arrayBuffer())
-        ]);
-
-        const geojson = await shp.combine([
-          shp.parseShp(shpBuffer, Buffer.from(prjBuffer)),
-          shp.parseDbf(dbfBuffer, Buffer.from(cpgBuffer))
-        ]);
-
-        processAndSetGeoJson(geojson);
-      } catch (error) {
-        console.error("Failed to fetch shapefile boundaries:", error);
-      } finally {
-        setLoading(false);
+    try {
+      const savedWards = localStorage.getItem('kochi-embedded-shapefile');
+      if (savedWards) {
+        setGeoJsonData(calculateCompositeScores(JSON.parse(savedWards)));
       }
+      
+      const savedRoutes = localStorage.getItem('kochi-uploaded-routes');
+      if (savedRoutes) {
+        setCustomRoutes(JSON.parse(savedRoutes));
+      }
+      
+      const savedBusStops = localStorage.getItem('kochi-uploaded-bus-stops');
+      if (savedBusStops) {
+        setCustomBusStops(JSON.parse(savedBusStops));
+      }
+    } catch (e) {
+      console.error("Failed to load saved data from localStorage:", e);
     }
-    
-    fetchRealBoundaries();
   }, []);
 
   const processAndSetGeoJson = (geojson: any) => {
@@ -364,10 +351,13 @@ export default function App() {
       };
     });
 
-    setGeoJsonData({
+    const finalCollection = {
       type: 'FeatureCollection',
       features: enrichedFeatures
-    });
+    };
+
+    setGeoJsonData(finalCollection);
+    localStorage.setItem('kochi-embedded-shapefile', JSON.stringify(finalCollection));
     setDataTimestamp(Date.now());
   };
 
@@ -397,9 +387,9 @@ export default function App() {
           throw new Error("Missing .shp or .dbf file");
         }
 
-        geojson = await shp.combine([
-          shp.parseShp(fileMap.shp, fileMap.prj ? Buffer.from(fileMap.prj) : undefined),
-          shp.parseDbf(fileMap.dbf, fileMap.cpg ? Buffer.from(fileMap.cpg) : undefined)
+        geojson = combine([
+          parseShp(fileMap.shp, fileMap.prj ? Buffer.from(fileMap.prj) : undefined),
+          parseDbf(fileMap.dbf, fileMap.cpg ? Buffer.from(fileMap.cpg) : undefined)
         ]);
       }
 
@@ -414,10 +404,180 @@ export default function App() {
     }
   };
 
+  const handleRouteUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    setLoading(true);
+    setUploadError(null);
+
+    try {
+      const file = files[0];
+      const text = await file.text();
+      let geojson: any;
+
+      if (file.name.endsWith('.geojson') || file.name.endsWith('.json')) {
+        geojson = JSON.parse(text);
+      } else if (file.name.endsWith('.kml')) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(text, "text/xml");
+        const coordsElements = doc.getElementsByTagName("coordinates");
+        const features = [];
+        for (let i = 0; i < coordsElements.length; i++) {
+          const coordsStr = coordsElements[i].textContent || "";
+          const coords = coordsStr.trim().split(/\s+/).map(pt => {
+            const parts = pt.split(',');
+            const lng = Number(parts[0]);
+            const lat = Number(parts[1]);
+            return [lng, lat];
+          }).filter(pt => !isNaN(pt[0]) && !isNaN(pt[1]));
+          
+          if (coords.length > 0) {
+            features.push({
+              type: "Feature",
+              properties: { name: `Route ${i + 1}` },
+              geometry: {
+                type: "LineString",
+                coordinates: coords
+              }
+            });
+          }
+        }
+        if (features.length === 0) throw new Error("No coordinate features found in KML");
+        geojson = { type: "FeatureCollection", features };
+      } else if (file.name.endsWith('.gpx')) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(text, "text/xml");
+        const trkpts = doc.getElementsByTagName("trkpt");
+        const coords = [];
+        for (let i = 0; i < trkpts.length; i++) {
+          const lat = Number(trkpts[i].getAttribute("lat"));
+          const lon = Number(trkpts[i].getAttribute("lon"));
+          if (!isNaN(lat) && !isNaN(lon)) {
+            coords.push([lon, lat]);
+          }
+        }
+        if (coords.length === 0) throw new Error("No trkpt elements found in GPX");
+        geojson = {
+          type: "FeatureCollection",
+          features: [{
+            type: "Feature",
+            properties: { name: file.name.replace(/\.[^/.]+$/, "") },
+            geometry: {
+              type: "LineString",
+              coordinates: coords
+            }
+          }]
+        };
+      } else {
+        throw new Error("Unsupported format. Use .geojson, .json, .kml or .gpx");
+      }
+
+      setCustomRoutes(geojson);
+      localStorage.setItem('kochi-uploaded-routes', JSON.stringify(geojson));
+      setDataTimestamp(Date.now());
+      setActiveSection('map');
+    } catch (error: any) {
+      console.error("Route upload failed:", error);
+      setUploadError(error.message || "Failed to parse routes.");
+    } finally {
+      setLoading(false);
+      if (routeInputRef.current) routeInputRef.current.value = '';
+    }
+  };
+
+  const handleBusStopUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    setLoading(true);
+    setUploadError(null);
+
+    try {
+      const file = files[0];
+      const text = await file.text();
+      let geojson: any;
+
+      if (file.name.endsWith('.geojson') || file.name.endsWith('.json')) {
+        geojson = JSON.parse(text);
+      } else if (file.name.endsWith('.csv')) {
+        const lines = text.split(/\r?\n/);
+        if (lines.length < 2) throw new Error("CSV file is empty or missing headers");
+        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+        const latIdx = headers.findIndex(h => h.includes('lat') || h.includes('y'));
+        const lngIdx = headers.findIndex(h => h.includes('lng') || h.includes('lon') || h.includes('x') || h.includes('long'));
+        const nameIdx = headers.findIndex(h => h.includes('name') || h.includes('stop') || h.includes('label'));
+
+        if (latIdx === -1 || lngIdx === -1) {
+          throw new Error("Could not find latitude or longitude columns in CSV (e.g. lat, lng, latitude, longitude)");
+        }
+
+        const features = [];
+        for (let i = 1; i < lines.length; i++) {
+          if (!lines[i].trim()) continue;
+          
+          // Simple comma splitting, handling possible quotes
+          const cols: string[] = [];
+          let current = '';
+          let inQuotes = false;
+          for (let charIdx = 0; charIdx < lines[i].length; charIdx++) {
+            const char = lines[i][charIdx];
+            if (char === '"') {
+              inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+              cols.push(current);
+              current = '';
+            } else {
+              current += char;
+            }
+          }
+          cols.push(current);
+
+          const lat = Number(cols[latIdx]);
+          const lng = Number(cols[lngIdx]);
+          const name = nameIdx !== -1 && cols[nameIdx] ? cols[nameIdx].trim() : `Bus Stop ${i}`;
+
+          if (!isNaN(lat) && !isNaN(lng)) {
+            features.push({
+              type: "Feature",
+              properties: { name },
+              geometry: {
+                type: "Point",
+                coordinates: [lng, lat]
+              }
+            });
+          }
+        }
+        if (features.length === 0) throw new Error("No valid point rows found in CSV");
+        geojson = { type: "FeatureCollection", features };
+      } else {
+        throw new Error("Unsupported format. Use .geojson, .json or .csv");
+      }
+
+      setCustomBusStops(geojson);
+      localStorage.setItem('kochi-uploaded-bus-stops', JSON.stringify(geojson));
+      setDataTimestamp(Date.now());
+      setActiveSection('map');
+    } catch (error: any) {
+      console.error("Bus stops upload failed:", error);
+      setUploadError(error.message || "Failed to parse bus stops.");
+    } finally {
+      setLoading(false);
+      if (busStopInputRef.current) busStopInputRef.current.value = '';
+    }
+  };
+
   const resetToDefault = () => {
+    localStorage.removeItem('kochi-embedded-shapefile');
+    localStorage.removeItem('kochi-uploaded-routes');
+    localStorage.removeItem('kochi-uploaded-bus-stops');
     setGeoJsonData(calculateCompositeScores(INITIAL_DATA));
+    setCustomRoutes(null);
+    setCustomBusStops(null);
     setSelectedWard(null);
     setComparisonWard(null);
+    setDataTimestamp(Date.now());
+    setUploadError(null);
   };
 
   // Color scale for choropleth
@@ -679,14 +839,7 @@ export default function App() {
           ))}
         </div>
 
-        {/* Theme Toggle */}
-        <button
-          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          className="p-4 rounded-2xl text-[var(--slate-600)] hover:text-[var(--text)] hover:bg-[var(--panel-bg)] transition-all duration-300"
-          title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-        >
-          {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-        </button>
+
       </nav>
 
       {/* Narrative Sidebar */}
@@ -793,19 +946,39 @@ export default function App() {
                   </h3>
                   
                   <div className="space-y-3">
-                    <button 
-                      onClick={() => fileInputRef.current?.click()}
-                      className="w-full p-4 bg-[var(--panel-bg)] border border-[var(--panel-border)] hover:bg-[var(--panel-bg)] rounded-2xl transition-all flex items-center gap-4 group"
-                    >
-                      <div className="p-3 bg-[var(--accent-bg)] text-[var(--accent)] rounded-xl group-hover:bg-[var(--accent)] group-hover:text-white transition-all">
-                        <Upload size={20} />
+                    {/* Shapefile Upload */}
+                    <div className="space-y-1">
+                      <button 
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-full p-4 bg-[var(--panel-bg)] border border-[var(--panel-border)] hover:bg-[var(--panel-bg)]/80 rounded-2xl transition-all flex items-center gap-4 group text-left"
+                      >
+                        <div className="p-3 bg-[var(--accent-bg)] text-[var(--accent)] rounded-xl group-hover:bg-[var(--accent)] group-hover:text-white transition-all">
+                          <Upload size={20} />
+                        </div>
+                        <div className="text-left flex-1">
+                          <span className="block font-bold text-sm text-[var(--text)]">Upload Wards Shapefile</span>
+                          <span className="block text-[10px] text-[var(--slate-500)]">Supports .zip or .shp + .dbf</span>
+                        </div>
+                      </button>
+                      <div className="px-1 flex justify-between items-center">
+                        <span className="text-[10px] font-medium text-[var(--slate-500)]">
+                          Status: {localStorage.getItem('kochi-embedded-shapefile') ? "Custom boundaries active" : "Default pre-embedded shapes"}
+                        </span>
+                        {localStorage.getItem('kochi-embedded-shapefile') && (
+                          <button 
+                            onClick={() => {
+                              localStorage.removeItem('kochi-embedded-shapefile');
+                              setGeoJsonData(calculateCompositeScores(INITIAL_DATA));
+                              setDataTimestamp(Date.now());
+                            }}
+                            className="text-[9px] font-bold text-[var(--status-rose)] hover:underline"
+                          >
+                            Reset
+                          </button>
+                        )}
                       </div>
-                      <div className="text-left">
-                        <span className="block font-bold text-sm text-[var(--text)]">Upload Shapefile</span>
-                        <span className="block text-[10px] text-[var(--slate-500)]">Supports .zip or .shp + .dbf</span>
-                      </div>
-                    </button>
-                    
+                    </div>
+
                     <input 
                       type="file" 
                       ref={fileInputRef}
@@ -815,19 +988,101 @@ export default function App() {
                       onChange={handleFileUpload}
                     />
 
+                    {/* Routes Upload */}
+                    <div className="space-y-1">
+                      <button 
+                        onClick={() => routeInputRef.current?.click()}
+                        className="w-full p-4 bg-[var(--panel-bg)] border border-[var(--panel-border)] hover:bg-[var(--panel-bg)]/80 rounded-2xl transition-all flex items-center gap-4 group text-left"
+                      >
+                        <div className="p-3 bg-[var(--status-blue-bg)] text-[var(--status-blue)] rounded-xl group-hover:bg-[var(--status-blue)] group-hover:text-white transition-all">
+                          <LinkIcon size={20} />
+                        </div>
+                        <div className="text-left flex-1">
+                          <span className="block font-bold text-sm text-[var(--text)]">Upload Infrastructure Routes</span>
+                          <span className="block text-[10px] text-[var(--slate-500)]">Supports .kml, .gpx, .geojson, .json</span>
+                        </div>
+                      </button>
+                      <div className="px-1 flex justify-between items-center">
+                        <span className="text-[10px] font-medium text-[var(--slate-500)]">
+                          Status: {customRoutes ? `${customRoutes.features?.length || 1} path(s) loaded` : "None loaded"}
+                        </span>
+                        {customRoutes && (
+                          <button 
+                            onClick={() => {
+                              localStorage.removeItem('kochi-uploaded-routes');
+                              setCustomRoutes(null);
+                              setDataTimestamp(Date.now());
+                            }}
+                            className="text-[9px] font-bold text-[var(--status-rose)] hover:underline"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <input 
+                      type="file" 
+                      ref={routeInputRef}
+                      className="hidden" 
+                      accept=".geojson,.json,.kml,.gpx"
+                      onChange={handleRouteUpload}
+                    />
+
+                    {/* Bus Stops Upload */}
+                    <div className="space-y-1">
+                      <button 
+                        onClick={() => busStopInputRef.current?.click()}
+                        className="w-full p-4 bg-[var(--panel-bg)] border border-[var(--panel-border)] hover:bg-[var(--panel-bg)]/80 rounded-2xl transition-all flex items-center gap-4 group text-left"
+                      >
+                        <div className="p-3 bg-[var(--status-emerald-bg)] text-[var(--status-emerald)] rounded-xl group-hover:bg-[var(--status-emerald)] group-hover:text-white transition-all">
+                          <Bus size={20} />
+                        </div>
+                        <div className="text-left flex-1">
+                          <span className="block font-bold text-sm text-[var(--text)]">Upload Transit Stops</span>
+                          <span className="block text-[10px] text-[var(--slate-500)]">Supports .csv (lat, lng), .geojson, .json</span>
+                        </div>
+                      </button>
+                      <div className="px-1 flex justify-between items-center">
+                        <span className="text-[10px] font-medium text-[var(--slate-500)]">
+                          Status: {customBusStops ? `${customBusStops.features?.length || 0} stops loaded` : "None loaded"}
+                        </span>
+                        {customBusStops && (
+                          <button 
+                            onClick={() => {
+                              localStorage.removeItem('kochi-uploaded-bus-stops');
+                              setCustomBusStops(null);
+                              setDataTimestamp(Date.now());
+                            }}
+                            className="text-[9px] font-bold text-[var(--status-rose)] hover:underline"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <input 
+                      type="file" 
+                      ref={busStopInputRef}
+                      className="hidden" 
+                      accept=".geojson,.json,.csv"
+                      onChange={handleBusStopUpload}
+                    />
+
                     {uploadError && (
-                <div className="p-3 bg-[var(--status-rose-bg)] border border-[var(--status-rose)]/20 rounded-xl flex items-start gap-3">
-                  <AlertCircle size={14} className="text-[var(--status-rose)] mt-0.5 shrink-0" />
-                  <p className="text-[10px] text-[var(--status-rose)] leading-normal">{uploadError}</p>
-                </div>
+                      <div className="p-3 bg-[var(--status-rose-bg)] border border-[var(--status-rose)]/20 rounded-xl flex items-start gap-3">
+                        <AlertCircle size={14} className="text-[var(--status-rose)] mt-0.5 shrink-0" />
+                        <p className="text-[10px] text-[var(--status-rose)] leading-normal">{uploadError}</p>
+                      </div>
                     )}
 
                     <button 
                       onClick={resetToDefault}
-                      className="w-full py-2 text-[10px] font-bold text-[var(--slate-500)] hover:text-[var(--accent)] transition-colors flex items-center justify-center gap-2"
+                      className="w-full py-3 bg-[var(--panel-bg)] border border-dashed border-[var(--panel-border)] hover:bg-[var(--panel-bg)]/50 text-[10px] font-bold text-[var(--slate-500)] hover:text-[var(--accent)] rounded-2xl transition-colors flex items-center justify-center gap-2"
                     >
                       <FileJson size={12} />
-                      RESET TO DEFAULT DATA
+                      RESET ALL CONFIGURATIONS
                     </button>
                   </div>
                 </div>
@@ -1737,10 +1992,7 @@ export default function App() {
         >
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url={theme === 'dark' 
-              ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-              : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-            }
+            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
           />
           <GeoJSON 
             key={`${selectedIndicator}-${selectedWard?.name}-${dataTimestamp}`}
@@ -1748,6 +2000,38 @@ export default function App() {
             style={getStyle}
             onEachFeature={onEachFeature}
           />
+          {customRoutes && (
+            <GeoJSON
+              key={`routes-${dataTimestamp}`}
+              data={customRoutes}
+              style={{
+                color: 'var(--status-blue)',
+                weight: 4,
+                opacity: 0.8,
+                dashArray: '5, 5'
+              }}
+            />
+          )}
+          {customBusStops && (
+            <GeoJSON
+              key={`bus-stops-${dataTimestamp}`}
+              data={customBusStops}
+              pointToLayer={(feature, latlng) => {
+                return L.circleMarker(latlng, {
+                  radius: 6,
+                  fillColor: 'var(--status-emerald)',
+                  color: 'white',
+                  weight: 1.5,
+                  opacity: 1,
+                  fillOpacity: 0.9
+                });
+              }}
+              onEachFeature={(feature, layer) => {
+                const name = feature.properties?.name || feature.properties?.Name || 'Bus Stop';
+                layer.bindPopup(`<div class="font-bold text-xs">${name}</div>`);
+              }}
+            />
+          )}
           
           {/* Map Overlay UI */}
           <div className="absolute top-8 right-8 flex flex-col gap-4 z-[1000]">
